@@ -268,7 +268,7 @@ V.cuidador = () => {
   const html = `<div class="card"><h3>🩺 Visto bueno de la fisioterapeuta</h3><p class="small">Del nivel 3 al 12 hay que abrirlos a mano, uno a uno. Los niveles 6-12 (pesas, mancuernas, gimnasio y barra) son una escalera de diseño propio, sin estudio que la valide para su espalda: ábrelos solo cuando lo hayáis hablado con un profesional que la haya explorado.</p>
   ${sw('gates:', s.gates, 'Pedir visto bueno (recomendado)')}${Object.keys(NIVELES).map(Number).filter(n => n >= 3).map(n => sw('lvl:' + n, s.aprobNiveles.indexOf(n) >= 0, 'Abrir nivel ' + n + ' · ' + NIVELES[n].nombre) + (NIVELES[n].aviso ? '<p class="small lvlnote">' + esc(NIVELES[n].aviso) + '</p>' : '')).join('')}
   <details class="acc"><summary>Ejercicios concretos que piden fisio (${fisioEx.length})</summary>${fisioEx.map(e => sw('exok:' + e.id, s.aprobEj.indexOf(e.id) >= 0, esc(e.nombre) + ' <small>(nivel ' + e.nivel + ')</small>')).join('')}</details></div>
-  <div class="card"><h3>⏩ Empezar en un nivel más alto</h3><p class="small">Si los primeros ejercicios se le quedan cortos: marca como superados todos los de los niveles anteriores y abre hasta el nivel elegido. Los ejercicios marcados “fisio” siguen pidiendo su propio visto bueno (arriba). No hay marcha atrás automática: puedes reabrir ejercicios uno a uno desde su ficha.</p>
+  <div class="card"><h3>⏩ Empezar en un nivel más alto</h3><p class="small">Si los primeros ejercicios se le quedan cortos: marca como superados todos los de los niveles anteriores y abre hasta el nivel elegido. Los niveles anteriores se ocultan de la pantalla Entrenar (se pueden volver a mostrar ahí). Los ejercicios marcados “fisio” siguen pidiendo su propio visto bueno (arriba).</p>
   <label>Empezar en<select class="inp" id="skipN">${[2, 3, 4, 5].map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>Nivel ${n} · ${esc(NIVELES[n].nombre)}</option>`).join('')}</select></label>
   <button class="btn ghost" data-a="skipLevels">Aplicar</button></div>
   <div class="card"><h3>🧰 Material que tiene</h3><p class="small">Los ejercicios que piden algo que no está marcado aparecen como “Falta material”.</p>
@@ -302,7 +302,7 @@ ACT.skipLevels = async () => {
   const n = +$('#skipN').value, bajos = EJERCICIOS.filter(e => e.nivel < n && e.bloque !== 'calent');
   if (!await ask('¿Empezar en el nivel ' + n + '?', 'Se marcarán como superados ' + bajos.length + ' ejercicios de los niveles anteriores y se abrirán los niveles hasta el ' + n + '. Úsalo solo si de verdad los hace con soltura y sin dolor.', 'Sí, empezar ahí', 'Cancelar')) return;
   const m = Object.assign({}, mastered()), d = addDays(today(), -30); bajos.forEach(e => { if (!m[e.id]) m[e.id] = d; }); db.set('dominados', m);
-  const a = cfg().aprobNiveles.slice(); for (let k = 3; k <= n; k++) if (a.indexOf(k) < 0) a.push(k); setCfg({ aprobNiveles: a, cadaDias: Math.min(cfg().cadaDias, 3) });
+  const a = cfg().aprobNiveles.slice(); for (let k = 3; k <= n; k++) if (a.indexOf(k) < 0) a.push(k); setCfg({ aprobNiveles: a, cadaDias: Math.min(cfg().cadaDias, 3), ocultoHasta: n - 1, verOcultos: false });
   toast('Listo: empieza en el nivel ' + n); draw(true);
 };
 CHG.mat = el => { const m = Object.assign({}, DEFAULT_SETTINGS.mat, cfg().mat || {}); m[el.dataset.id] = el.checked; setCfg({ mat: m }); };
