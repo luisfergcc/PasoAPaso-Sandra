@@ -6,7 +6,7 @@
   const L = { torso: 50, neck: 7, head: 10, thigh: 42, shin: 40, foot: 15, ua: 28, fa: 26 };
   const FLOOR = 172;
   const KEYS = ['hx','hy','t','arch','nax','nay','fax','fay','nfa','ffa','nhx','nhy','fhx','fhy',
-    'kdnx','kdny','kdfx','kdfy','ednx','edny','edfx','edfy','nuk','nkx','nky','fuk','fkx','fky','br'];
+    'kdnx','kdny','kdfx','kdfy','ednx','edny','edfx','edfy','nuk','nkx','nky','fuk','fkx','fky','br','wt','wf'];
   const rad = d => d * Math.PI / 180;
 
   /* ---------- cinemática inversa de 2 segmentos ---------- */
@@ -71,6 +71,18 @@
   const poly = (pts, w, cls) => `<polyline points="${pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ')}" stroke-width="${w}" class="${cls}" fill="none"/>`;
   const C = (hi, k) => hi.indexOf(k) >= 0 ? 'seg hi' : 'seg';
 
+  /* pesos: wt = lo que sujeta la mano cercana (1 mancuerna, 2 barra vista de canto, 3 banda, 4 almohadilla de máquina), wf = mancuerna en la mano lejana */
+  function gear(p, a, b, side) {
+    let o = '';
+    const f = q => q[0].toFixed(1) + '" cy="' + q[1].toFixed(1);
+    if (p.wf > 0.5) o += `<circle cx="${f(b)}" r="5.5" class="dumb far"/>`;
+    if (p.wt > 3.5) o += `<line x1="${(a[0] + 5).toFixed(1)}" y1="${(a[1] - 4).toFixed(1)}" x2="${(a[0] + 5).toFixed(1)}" y2="${(a[1] + 30).toFixed(1)}" stroke-width="7" class="seg pad"/>`;
+    else if (p.wt > 2.5) o += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke-width="2.5" class="band"/>`;
+    else if (p.wt > 1.5) o += `<circle cx="${f(a)}" r="12" class="plate"/><circle cx="${f(a)}" r="2.5" class="dumb"/>`;
+    else if (p.wt > 0.5) o += `<circle cx="${f(a)}" r="6.5" class="dumb"/>`;
+    return o;
+  }
+
   function drawSide(p, hi) {
     const s = solveSide(p); let o = '';
     const foot = (a, ang, cls) => { const r = rad(ang); return line(a, [a[0] + L.foot * Math.cos(r), a[1] + L.foot * Math.sin(r)], 6, cls); };
@@ -84,6 +96,7 @@
     // cercanos
     o += poly([s.hip, s.ln.j, s.ln.e], 9, C(hi, 'nl')) + foot(s.ln.e, p.nfa, C(hi, 'nl'));
     o += poly([s.sh, s.an.j, s.an.e], 7, C(hi, 'na'));
+    o += gear(p, s.an.e, s.af.e, true);
     // cabeza
     o += `<circle cx="${s.hc[0].toFixed(1)}" cy="${s.hc[1].toFixed(1)}" r="${L.head}" class="head"/>`;
     o += `<circle cx="${(s.hc[0] + s.nrm[0] * 4.5 + s.dir[0] * 1).toFixed(1)}" cy="${(s.hc[1] + s.nrm[1] * 4.5 + s.dir[1] * 1).toFixed(1)}" r="1.6" class="eye"/>`;
@@ -106,6 +119,7 @@
     o += line(hipL, hipR, 10, C(hi, 'core'));
     o += line(hipC, shC, 14, C(hi, 'core')) + line(shL, shR, 9, C(hi, 'core'));
     o += poly([shL, af.j, af.e], 7, C(hi, 'fa')) + poly([shR, an.j, an.e], 7, C(hi, 'na'));
+    if (p.wt > 2.5 && p.wt < 3.5) o += gear(p, af.e, an.e); else if (p.wt > 0.5 || p.wf > 0.5) o += gear(Object.assign({}, p, { wt: p.wt === 2 ? 2 : p.wt }), an.e, af.e);
     o += `<circle cx="${hc[0].toFixed(1)}" cy="${hc[1].toFixed(1)}" r="${L.head}" class="head"/>`;
     o += `<circle cx="${(hc[0] - 3.6).toFixed(1)}" cy="${(hc[1] - 1).toFixed(1)}" r="1.5" class="eye"/><circle cx="${(hc[0] + 3.6).toFixed(1)}" cy="${(hc[1] - 1).toFixed(1)}" r="1.5" class="eye"/>`;
     return o;
@@ -125,6 +139,7 @@
     step(x, h) { return `<rect x="${x}" y="${FLOOR - h}" width="64" height="${h}" rx="2" class="propf dark"/>`; },
     rail(x1, y1, x2, y2) { return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="prop thick"/><line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y1 + 34}" class="prop"/><line x1="${x2}" y1="${y2}" x2="${x2}" y2="${y2 + 34}" class="prop"/>`; },
     wall(x) { return `<rect x="${x}" y="0" width="${300 - x}" height="${FLOOR}" class="propf wall"/>`; },
+    bench(x1, x2, y) { return `<rect x="${x1}" y="${y}" width="${x2 - x1}" height="8" rx="3" class="propf dark"/><line x1="${x1 + 8}" y1="${y + 8}" x2="${x1 + 8}" y2="${FLOOR}" class="prop"/><line x1="${x2 - 8}" y1="${y + 8}" x2="${x2 - 8}" y2="${FLOOR}" class="prop"/>`; },
     ground() { return `<line x1="0" y1="${FLOOR}" x2="300" y2="${FLOOR}" class="ground"/>`; }
   };
 

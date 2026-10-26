@@ -44,6 +44,8 @@ V.caminar = () => {
   const st = weekStats(), all = walks().slice().reverse();
   const html = `<h1>Caminar</h1>
   <div class="card cta"><div class="rowb"><div><h3>Objetivo de hoy</h3><p class="big2">${cf.walkTarget} min</p><small>A tu ritmo, sin prisa</small></div><div class="ring" style="--p:${Math.min(100, Math.round(walks().filter(w => w.date === today()).reduce((a, w) => a + w.durSec, 0) / 60 / cf.walkTarget * 100))}"><span>🚶</span></div></div>
+  ${walkWarn()}
+  ${calCard()}
   <button class="btn xl" data-a="wkGo">▶ Empezar paseo</button>
   <label class="chk"><input type="checkbox" id="usegps" ${cf.gps === false ? '' : 'checked'} data-c="gpsopt"> Usar GPS para medir los km</label>
   <button class="link" data-a="wkManual">+ Añadir un paseo sin GPS (por ejemplo, por casa)</button></div>
@@ -52,6 +54,51 @@ V.caminar = () => {
   return { html };
 };
 CHG.gpsopt = el => setCfg({ gps: el.checked });
+function walkWarn() {
+  const c = todayCheck(); let h = '';
+  if (c && c.semaforo === 'rojo') h += '<div class="card red"><p><b>Hoy no salgas a caminar.</b> Lo que marcaste en la revisión merece que lo vea un médico.</p><button class="btn" data-a="nav" data-v="checkres">Ver qué hacer</button></div>';
+  else if (c && c.semaforo === 'noche') h += '<div class="card amber"><p>🌙 Con las pastillas de la noche, mejor no salgas a caminar: puede haber mareo o caídas. Mañana, antes de tomarlas.</p></div>';
+  if (kneeOff()) h += '<div class="card amber"><p>🦵 Hay una pausa de rodilla activa. Antes de salir a caminar, confirma con Luis qué ha dicho el médico.</p></div>';
+  return h;
+}
+function calCard() {
+  const cur = calCurrent(), E = CAL_ETAPAS[cur], c = todayCheck(), r = calList(cur, c), done = calToday();
+  return `<div class="card"><h3>🔥 Antes de salir</h3><p class="small">Calentamiento · ${E.emoji} ${E.nombre} · unos ${calMin(r.list)} min${done ? ' · ✅ hecho hoy' : ''}</p>
+  <button class="btn ${done ? 'ghost' : ''}" data-a="calGo">${done ? 'Repetir el calentamiento' : 'Calentar ahora'}</button>
+  ${cur > 1 ? '<button class="link" data-a="calGo" data-s="1">Hoy prefiero la versión sentada</button>' : ''}
+  <button class="link" data-a="nav" data-v="calent">Ver ejercicios y etapas</button></div>`;
+}
+V.calent = () => {
+  const cur = calCurrent(), c = todayCheck();
+  const need = { 2: 'Se abre tras 4 calentamientos sentada sin dolor.', 3: 'Se abre tras 6 calentamientos de pie y con el visto bueno de la fisio (lo activa Luis).' };
+  const stage = n => {
+    const E = CAL_ETAPAS[n], ok = calStageOk(n), isCur = n === cur, r = calList(n, c);
+    return `<div class="level ${ok ? '' : 'locked'}"><div class="lh"><span class="le">${E.emoji}</span><div><b>Etapa ${n} · ${E.nombre}</b><small>${E.desc}</small></div>${isCur ? '<span class="lc">Tu etapa</span>' : ''}</div>
+    ${ok ? '' : `<p class="small lockmsg">🔒 ${need[n]}</p>`}
+    <div class="exlist">${CAL_ETAPAS[n].ids.map(i => { const e = EX[i], st = exState(e), b = BLOQUES.calent; return `<button class="exrow ${st === 'visto' ? 'wait' : ''}" ${np('ejercicio', { id: e.id })}><span class="ei">${b[1]}</span><span class="en"><b>${esc(e.nombre)}</b><small>${e.rodilla ? 'Carga la rodilla · ' : ''}${esc(e.dosis)}</small></span><span class="es">${st === 'visto' ? '🩺' : '▶️'}</span></button>`; }).join('')}</div>
+    ${ok ? `<button class="btn ${isCur ? '' : 'ghost'}" data-a="calGo" data-s="${n}">Hacer la etapa ${n} (~${calMin(r.list)} min)</button>` : ''}</div>`;
+  };
+  const html = `<h1>Calentamiento</h1><p class="lead">Antes de caminar, 5 minutos de movimientos suaves: despiertan las caderas, los tobillos y las piernas, y ayudan a caminar más suelta. No es estirar a lo bruto ni hacerse daño.</p>
+  <div class="card"><h3>Cómo funciona</h3><ul class="lst"><li>Empiezas siempre <b>sentada</b> y, cuando lleves unos días, pasas a ejercicios <b>de pie con apoyo</b>.</li><li>Si un día estás cansada o con más dolor, haz solo la etapa 1.</li><li>Los primeros 3 minutos del paseo, a ritmo lento.</li><li>Nunca después de las pastillas de la noche.</li></ul></div>
+  ${stage(1)}${stage(2)}${stage(3)}
+  <div class="card"><h3>🧊 Al volver</h3><p class="small">${CAL_ETAPAS.fin.desc}</p><button class="btn ghost" data-a="calGo" data-s="fin">Hacer 2 minutos</button></div>
+  <p class="small">Estos ejercicios no se “superan”: se repiten cada día que salgas a caminar.</p>`;
+  return { title: 'Calentamiento', html };
+};
+ACT.calGo = async el => {
+  const raw = el && el.dataset && el.dataset.s; let stage = raw ? (raw === 'fin' ? 'fin' : +raw) : calCurrent();
+  if (stage !== 'fin') {
+    const c0 = todayCheck();
+    if (!c0) { toast('Primero, un repaso rápido de cómo estás'); return nav('checkin', { calent: stage }); }
+    if (c0.semaforo === 'rojo') return nav('checkres');
+    if (c0.semaforo === 'noche') { modal('<h3>Mejor mañana</h3><p>Con las pastillas de la noche, mejor no hacer ejercicio de pie ni salir a caminar: puede haber mareo o caídas. Mañana lo haces antes de tomarlas.</p><button class="btn" data-a="close">Vale</button>'); return; }
+    if (c0.semaforo === 'amarillo') stage = 1;
+  }
+  const c = todayCheck(), r = stage === 'fin' ? calList('fin') : calList(stage, c);
+  if (!r.list.length) return toast('Hoy no hay ejercicios disponibles');
+  if (r.fallback) toast('Por la rodilla, hoy el calentamiento es sentada.', 4000);
+  startSession(!!(c && c.semaforo === 'amarillo' && stage !== 'fin'), r.list, 'calent', { stage: r.stage });
+};
 function wkTick() {
   const s = WK.s; if (!s) return; const cf = cfg(), el = wkElapsed(); const m = el / 60;
   const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
@@ -62,7 +109,13 @@ function wkTick() {
   const g = document.getElementById('wgps'); if (g && s.gps) g.textContent = s.err || (s.acc ? (s.acc <= 20 ? '🟢 Buena señal GPS' : s.acc <= 35 ? '🟡 Señal GPS regular' : '🟠 Buscando mejor señal…') : '🛰 Buscando señal…');
   if (s.nextPausa && !s.paused && m >= s.nextPausa) { s.nextPausa += cf.pausaMin; beep(2); toast('⏸ ¿Descansas un minuto? Siéntate si lo necesitas.', 6000); }
 }
-ACT.wkGo = async () => {
+ACT.wkGo = async el => {
+  const c = todayCheck();
+  if (c && c.semaforo === 'rojo') return nav('checkres');
+  if (c && c.semaforo === 'noche' && !(await ask('Con las pastillas de la noche', 'Salir a caminar ahora puede ser peligroso (mareo, caídas). Mejor mañana, antes de tomarlas. ¿Quieres salir igualmente?', 'Salir igualmente', 'Mejor no'))) return;
+  if (!(el && el.skipCal) && cfg().calentar !== false && !calToday()) {
+    if (await ask('Antes de salir', 'Son unos 5 minutos para despertar las caderas, las piernas y los tobillos. Así caminas más a gusto. ¿Calentamos?', 'Sí, calentar', 'Salir ya')) return ACT.calGo();
+  }
   const gps = cfg().gps !== false;
   if (gps && navigator.permissions && navigator.permissions.query) { try { const r = await navigator.permissions.query({ name: 'geolocation' }); if (r.state === 'denied') { toast('La ubicación está bloqueada para esta app. Se medirá solo el tiempo.', 5000); return wkStart(false); } } catch (e) { } }
   wkStart(gps);
@@ -212,9 +265,18 @@ V.cuidador = () => {
   const s = cfg(), p = profile();
   const sw = (id, on, lab) => `<label class="sw"><input type="checkbox" data-c="${id.split(':')[0]}" data-id="${id.split(':')[1] || ''}" ${on ? 'checked' : ''}><span>${lab}</span></label>`;
   const fisioEx = EJERCICIOS.filter(e => e.fisio);
-  const html = `<div class="card"><h3>🩺 Visto bueno de la fisioterapeuta</h3><p class="small">Los niveles 3-5 y algunos ejercicios piden visto bueno. Ábrelos solo cuando lo hayáis hablado con la fisio.</p>
-  ${sw('gates:', s.gates, 'Pedir visto bueno (recomendado)')}${[3, 4, 5].map(n => sw('lvl:' + n, s.aprobNiveles.indexOf(n) >= 0, 'Abrir nivel ' + n + ' · ' + NIVELES[n].nombre)).join('')}
+  const html = `<div class="card"><h3>🩺 Visto bueno de la fisioterapeuta</h3><p class="small">Del nivel 3 al 12 hay que abrirlos a mano, uno a uno. Los niveles 6-12 (pesas, mancuernas, gimnasio y barra) son una escalera de diseño propio, sin estudio que la valide para su espalda: ábrelos solo cuando lo hayáis hablado con un profesional que la haya explorado.</p>
+  ${sw('gates:', s.gates, 'Pedir visto bueno (recomendado)')}${Object.keys(NIVELES).map(Number).filter(n => n >= 3).map(n => sw('lvl:' + n, s.aprobNiveles.indexOf(n) >= 0, 'Abrir nivel ' + n + ' · ' + NIVELES[n].nombre) + (NIVELES[n].aviso ? '<p class="small lvlnote">' + esc(NIVELES[n].aviso) + '</p>' : '')).join('')}
   <details class="acc"><summary>Ejercicios concretos que piden fisio (${fisioEx.length})</summary>${fisioEx.map(e => sw('exok:' + e.id, s.aprobEj.indexOf(e.id) >= 0, esc(e.nombre) + ' <small>(nivel ' + e.nivel + ')</small>')).join('')}</details></div>
+  <div class="card"><h3>🧰 Material que tiene</h3><p class="small">Los ejercicios que piden algo que no está marcado aparecen como “Falta material”.</p>
+  ${Object.keys(MATERIALES).map(k => sw('mat:' + k, (s.mat || {})[k] !== undefined ? s.mat[k] : MATERIALES[k][1], MATERIALES[k][0])).join('')}
+  <label>Mancuerna más pesada que tiene (kg)<input type="number" class="inp" data-c="set" data-k="kgMan" value="${s.kgMan}" min="1" max="60" step="0.5"></label>
+  <label>Minutos de una sesión de fuerza<input type="number" class="inp" data-c="set" data-k="minFuerza" value="${s.minFuerza}" min="10" max="60"></label>
+  <label>Sesiones de fuerza por semana (2 es lo habitual; siempre con un día entre medias)<input type="number" class="inp" data-c="set" data-k="fuerzaSem" value="${s.fuerzaSem}" min="1" max="3"></label></div>
+  <div class="card"><h3>🔥 Calentamiento antes de caminar</h3>
+  ${sw('calask:', s.calentar !== false, 'Preguntar si quiere calentar antes de empezar un paseo')}
+  ${sw('exok:w13', s.aprobEj.indexOf('w13') >= 0, 'Abrir la etapa 3 (paso atrás para abrir la cadera). Pídelo a la fisio antes: con estenosis o espondilolistesis, el estiramiento de la cadera puede arquear la espalda.')}
+  <label>Saltar directamente a la etapa<select class="inp" data-c="calmax"><option value="0" ${!s.calMax ? 'selected' : ''}>Automática</option><option value="2" ${s.calMax === 2 ? 'selected' : ''}>Etapa 2 ya abierta</option><option value="3" ${s.calMax === 3 ? 'selected' : ''}>Etapa 3 ya abierta</option></select></label></div>
   <div class="card"><h3>🦵 Rodilla</h3><p class="small">Pausa los ejercicios que cargan la rodilla (levantarse, escalones…) hasta la fecha que te diga el médico tras la infiltración. Esta app no sabe cuánto reposo hace falta: pregúntalo.</p>
   <label>Pausar hasta<input type="date" class="inp" data-c="kneeDate" value="${esc(s.rodillaHasta)}"></label><label>Rodilla infiltrada (nota)<input type="text" class="inp" data-c="kneeSide" value="${esc(s.rodillaLado)}" placeholder="derecha / izquierda / fecha"></label></div>
   <div class="card"><h3>⚙️ Ajustes</h3>
@@ -233,7 +295,9 @@ V.cuidador = () => {
 };
 CHG.gates = el => { setCfg({ gates: el.checked }); draw(true); };
 CHG.lvl = el => { const s = cfg(), n = +el.dataset.id, a = s.aprobNiveles.filter(x => x !== n); if (el.checked) a.push(n); setCfg({ aprobNiveles: a }); };
+CHG.mat = el => { const m = Object.assign({}, DEFAULT_SETTINGS.mat, cfg().mat || {}); m[el.dataset.id] = el.checked; setCfg({ mat: m }); };
 CHG.exok = el => { const s = cfg(), a = s.aprobEj.filter(x => x !== el.dataset.id); if (el.checked) a.push(el.dataset.id); setCfg({ aprobEj: a }); };
+CHG.calask = el => setCfg({ calentar: el.checked }); CHG.calmax = el => setCfg({ calMax: +el.value });
 CHG.kneeDate = el => setCfg({ rodillaHasta: el.value }); CHG.kneeSide = el => setCfg({ rodillaLado: el.value });
 CHG.set = el => { const v = +el.value; if (!isNaN(v)) setCfg({ [el.dataset.k]: v }); };
 CHG.meta = el => db.set('profile', Object.assign(profile(), { metaEj: el.value }));

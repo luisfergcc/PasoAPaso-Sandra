@@ -44,7 +44,8 @@ const db = {
   allFiles() { return new Promise(res => { const r = this._d.transaction('files').objectStore('files').getAll(); r.onsuccess = () => res(r.result); r.onerror = () => res([]); }); }
 };
 
-const DEFAULT_SETTINGS = { pin: '', gates: true, aprobNiveles: [1, 2], aprobEj: [], minutos: 10, walkTarget: 10, stride: 0.6, pausaMin: 0, voz: true, rodillaHasta: '', rodillaLado: '', cadaDias: 5 };
+const DEFAULT_SETTINGS = { pin: '', gates: true, aprobNiveles: [1, 2], aprobEj: [], minutos: 10, walkTarget: 10, stride: 0.6, pausaMin: 0, voz: true, rodillaHasta: '', rodillaLado: '', cadaDias: 5,
+  mat: { pesas: true, banda: true, agarre: true, mancuernas: false, gym: false }, kgMan: 10, minFuerza: 25, fuerzaSem: 2 };
 const cfg = () => Object.assign({}, DEFAULT_SETTINGS, db.get('settings', {}));
 const profile = () => Object.assign({ nombre: 'Sandra', baseLumbar: 5, basePierna: 5 }, db.get('profile', {}));
 const setCfg = patch => db.set('settings', Object.assign(cfg(), patch));
@@ -65,22 +66,56 @@ const walks = () => db.get('walks', []);
 function levelApproved(n) { const s = cfg(); return !s.gates || n <= 2 || s.aprobNiveles.indexOf(n) >= 0; }
 function exApproved(e) { const s = cfg(); return !s.gates || !e.fisio || s.aprobEj.indexOf(e.id) >= 0; }
 /* estado de un ejercicio: bloqueado | visto | disponible | dominado */
+/* material: ¿tiene lo que pide el ejercicio? */
+function matFalta(e) {
+  const m = Object.assign({}, DEFAULT_SETTINGS.mat, cfg().mat || {}), need = (e.mat || []).filter(k => !m[k]);
+  if (!need.length && e.kg && (e.mat || []).indexOf('mancuernas') >= 0 && (e.mat || []).indexOf('gym') < 0 && e.kg[0] > cfg().kgMan) need.push('mancuernas más pesadas (hasta ' + e.kg[0] + ' kg)');
+  return need.map(k => (MATERIALES[k] ? MATERIALES[k][0] : k));
+}
 function exState(e) {
   if (mastered()[e.id]) return 'dominado';
   if (e.previo && !mastered()[e.previo]) return 'bloqueado';
   if (!levelApproved(e.nivel) || !exApproved(e)) return 'visto';
+  if (matFalta(e).length) return 'material';
   return 'disponible';
 }
+const exUsable = e => { const s = exState(e); return s === 'disponible' || s === 'dominado'; };
 function lockReason(e) {
   const st = exState(e);
   if (st === 'bloqueado') { const p = EX[e.previo]; return 'Primero domina: ' + p.nombre; }
-  if (st === 'visto') return 'Necesita el visto bueno de la fisioterapeuta (lo activa Luis).';
+  if (st === 'visto') return levelApproved(e.nivel) ? 'Necesita el visto bueno de la fisioterapeuta (lo activa Luis).' : 'El nivel ' + e.nivel + ' se abre cuando Luis lo decide, con el visto bueno profesional.';
+  if (st === 'material') return 'Falta material: ' + matFalta(e).join(', ') + '. Luis puede marcarlo en Ajustes.';
   return '';
 }
 function kneeOff() { const s = cfg(); return !!(s.rodillaHasta && s.rodillaHasta >= today()); }
 function kneeSkip(e, check) { return e.rodilla && (kneeOff() || (check && check.rodilla >= 6)); }
 function logsOf(id, days) { const lim = addDays(today(), -days); return exLog().filter(l => l.id === id && l.date >= lim); }
-function repsFor(e) { const bien = logsOf(e.id, 30).filter(l => l.estado === 'bien').length; return Math.min(e.n[1], e.n[0] + Math.floor(bien / 3) * (e.timed ? 5 : 1)); }
+/* ---------- cargas (peso) ---------- */
+const cargas = () => db.get('cargas', {});
+function capIdx(e) { // último peldaño posible con su material
+  if (!e.kg) return 0; const last = e.kg.length - 1;
+  if ((e.mat || []).indexOf('gym') >= 0 || (e.mat || []).indexOf('mancuernas') < 0) return last;
+  let i = 0; e.kg.forEach((k, j) => { if (k <= cfg().kgMan) i = j; }); return i;
+}
+function kgIdx(e) { if (!e.kg) return 0; const v = cargas()[e.id]; return Math.max(0, Math.min(v == null ? 0 : v, capIdx(e))); }
+const kgNow = e => e.kg ? e.kg[kgIdx(e)] : null;
+function domIdx(e) { if (!e.kg) return 0; return Math.min(capIdx(e), e.kg.length <= 3 ? e.kg.length - 1 : Math.ceil((e.kg.length - 1) * 0.6)); }
+const kgTxt = v => v === 0 ? 'sin peso' : String(v).replace('.', ',') + ' kg';
+function setKg(e, i) { const c = Object.assign({}, cargas()); c[e.id] = Math.max(0, Math.min(i, capIdx(e))); db.set('cargas', c); }
+function repsFor(e) {
+  const l = logsOf(e.id, 30).filter(x => x.estado === 'bien' && (!e.kg || x.kg === kgNow(e)));
+  if (e.kg) return Math.min(e.n[1], e.n[0] + l.length * (e.timed ? 5 : 1));
+  return Math.min(e.n[1], e.n[0] + Math.floor(l.length / 3) * (e.timed ? 5 : 1));
+}
+/* tras anotar una serie de ejercicio con peso: ¿sube o baja la carga? devuelve 'sube' | 'baja' | '' */
+function ajustaCarga(e, estado, reps) {
+  if (!e.kg) return ''; const i = kgIdx(e);
+  if (estado === 'dolor') { if (i > 0) { setKg(e, i - 1); return 'baja'; } return ''; }
+  if (estado !== 'bien' || i >= capIdx(e)) return '';
+  const last = logsOf(e.id, 60).filter(x => x.kg === kgNow(e)).slice(-2);
+  if (last.length === 2 && last.every(x => x.estado === 'bien' && x.reps >= e.n[1])) { setKg(e, i + 1); return 'sube'; }
+  return '';
+}
 function masteryProgress(e) { const l = logsOf(e.id, 21); return { bien: l.filter(x => x.estado === 'bien').length, dolor: l.filter(x => x.estado === 'dolor').length, need: 6 }; }
 function canAutoUnlock() {
   const last = Object.values(mastered()).sort().pop(); const s = cfg();
@@ -92,6 +127,7 @@ function canAutoUnlock() {
 /* tras registrar un ejercicio: ¿se supera? */
 function checkMastery(e) {
   if (mastered()[e.id]) return false;
+  if (e.kg && kgIdx(e) < domIdx(e)) return false;
   const p = masteryProgress(e);
   if (p.bien >= p.need && p.dolor === 0 && canAutoUnlock()) { const m = Object.assign({}, mastered()); m[e.id] = today(); db.set('dominados', m); return true; }
   return false;
@@ -104,7 +140,28 @@ function activeIn(bloque) {
   const done = list.filter(e => exState(e) === 'dominado');
   return done.length ? done[done.length - 1] : null; // mantenimiento
 }
+const esFuerza = e => ORDEN_FUERZA.indexOf(e.bloque) >= 0;
+function fuerzaSesiones() { return sessions().filter(x => x.fuerza); }
+function toca_fuerza(check, light) { // día de fuerza: ≥48 h desde la última y como máximo fuerzaSem por semana
+  if (light || (check && (check.semaforo === 'rojo' || check.semaforo === 'amarillo' || check.semaforo === 'noche'))) return false;
+  if (!ORDEN_FUERZA.some(b => { const e = activeIn(b); return e && exUsable(e); })) return false;
+  const f = fuerzaSesiones(), last = f.length ? f[f.length - 1].date : null;
+  if (last && daysBetween(last, today()) < 2) return false;
+  return f.filter(x => x.date >= weekStart()).length < cfg().fuerzaSem;
+}
+function buildFuerza(check) {
+  const s = cfg(), out = []; let used = 0; const rot = (fuerzaSesiones().length * 2) % ORDEN_FUERZA.length;
+  const act = activeIn('cadera'); if (act && exUsable(act) && !kneeSkip(act, check) && act.min <= 3) { out.push(act); used += act.min; }
+  for (let k = 0; k < ORDEN_FUERZA.length && out.length < 6; k++) {
+    const b = ORDEN_FUERZA[(k + rot) % ORDEN_FUERZA.length]; let e = activeIn(b); if (!e || !exUsable(e) || out.indexOf(e) >= 0) continue;
+    if (kneeSkip(e, check)) continue;
+    if (used + e.min > s.minFuerza + 1.5) continue; out.push(e); used += e.min;
+  }
+  const co = activeIn('core'); if (co && exUsable(co) && !kneeSkip(co, check) && used + co.min <= s.minFuerza + 1.5 && out.indexOf(co) < 0) out.push(co);
+  return out;
+}
 function buildSession(check, light) {
+  if (toca_fuerza(check, light)) { const f = buildFuerza(check); if (f.filter(esFuerza).length >= 2) return f; }
   const s = cfg(); let budget = s.minutos * (light ? 0.6 : 1), out = [], used = 0;
   const parity = new Date().getDate() % 2;
   const blocks = ORDEN_SESION.filter(b => !light || ['resp', 'tobillo', 'rodilla', 'cadera', 'core', 'postura', 'movilidad'].indexOf(b) >= 0);
@@ -112,7 +169,7 @@ function buildSession(check, light) {
   blocks.forEach((b, i) => {
     let e = activeIn(b); if (!e) return;
     if (kneeSkip(e, check)) { // alternativa sin carga de rodilla del mismo nivel o inferior
-      const alt = EJERCICIOS.filter(x => x.bloque === b && !x.rodilla && exState(x) !== 'bloqueado' && exState(x) !== 'visto').pop(); e = alt || null; if (!e) return;
+      const alt = EJERCICIOS.filter(x => x.bloque === b && !x.rodilla && exUsable(x)).pop(); e = alt || null; if (!e) return;
     }
     const opt = must.indexOf(b) < 0; if (opt && (i + parity) % 2) return;
     if (used + e.min > budget + 1.5) return;
@@ -120,6 +177,23 @@ function buildSession(check, light) {
   });
   return out;
 }
+/* ---------- calentamiento antes de caminar ---------- */
+const calLog = () => db.get('calent', []);
+function calCount(st) { return calLog().filter(x => x.stage === st && !x.dolor).length; }
+function calStageOk(n) {
+  const s = cfg(), mx = s.calMax || 0; if (n === 1 || n === 'fin') return true;
+  if (n === 2) return calCount(1) >= 4 || mx >= 2;
+  if (n === 3) return (calCount(2) + calCount(3) >= 6 || mx >= 3) && exApproved(EX.w13);
+  return false;
+}
+const calCurrent = () => calStageOk(3) ? 3 : calStageOk(2) ? 2 : 1;
+const calToday = () => calLog().filter(x => x.date === today() && typeof x.stage === 'number').pop();
+function calList(stage, check) {
+  const l = CAL_ETAPAS[stage].ids.map(i => EX[i]).filter(e => !kneeSkip(e, check) && exApproved(e));
+  if (typeof stage === 'number' && stage > 1 && l.length < 5) return { stage: 1, fallback: true, list: calList(1, check).list };
+  return { stage, list: l };
+}
+const calMin = l => Math.max(2, Math.round(l.reduce((a, e) => a + e.min * (e.lado ? 1.6 : 1), 0)));
 function semaforo(c) {
   const p = profile();
   if (c.alarmas.some(id => (ALARMAS.find(a => a.id === id) || {}).nivel === 'urgente')) return 'rojo';

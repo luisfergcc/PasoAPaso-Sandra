@@ -4,14 +4,29 @@ const NIVELES = {
   2: { nombre: 'Cogiendo ritmo', emoji: '🌿', desc: 'Más control y más fuerza suave, todavía con mucho apoyo.' },
   3: { nombre: 'Fuerza útil', emoji: '💪', desc: 'De pie con apoyo y menos ayuda de los brazos.' },
   4: { nombre: 'Equilibrio y control', emoji: '⚖️', desc: 'Equilibrio con apoyo cercano y un escalón bajo.' },
-  5: { nombre: 'Autonomía', emoji: '🏅', desc: 'Movimientos parecidos a los de tu día a día.' }
+  5: { nombre: 'Autonomía', emoji: '🏅', desc: 'Movimientos parecidos a los de tu día a día.' },
+  6: { nombre: 'Primeros pesos', emoji: '🍶', desc: 'Pesas de 1 kg, banda elástica y ejercitador de agarre.', aviso: 'Pide: haber superado casi todo el nivel 5 (o al menos levantarse de la silla sin manos), sin síntomas neurológicos nuevos y con el dolor estable.' },
+  7: { nombre: 'Cargas ligeras', emoji: '🏋️‍♀️', desc: 'Mancuernas de 2 a 10 kg. Sentadilla a la silla, remo y press sentada.', aviso: 'Pide: nivel 6 casi completo y mancuernas ajustables o varias parejas. Conviene que la fisioterapeuta o el médico lo hayan visto.' },
+  8: { nombre: 'Patrones con peso', emoji: '🔩', desc: 'Peso muerto rumano con mancuernas, paseo del granjero, escalón con pesas.', aviso: 'Pide: nivel 7 casi completo y visto bueno profesional: la bisagra de cadera con carga mueve la zona lumbar.' },
+  9: { nombre: 'Gimnasio I', emoji: '🏟️', desc: 'Máquinas y mancuernas en banco: prensa, jalón, press de pecho, empuje de cadera.', aviso: 'Pide: acceso a un gimnasio, a ser posible con un monitor que enseñe la técnica, y visto bueno profesional.' },
+  10: { nombre: 'Gimnasio II', emoji: '🪝', desc: 'Primeras barras: sentadilla a caja, peso muerto desde bloques, press de pie.', aviso: 'Pide: visto bueno médico/fisio por escrito (hernia L5-S1, estenosis y espondilolistesis) y supervisión en persona.' },
+  11: { nombre: 'Gimnasio III', emoji: '⛓️', desc: 'Básicos libres: press de banca, press militar, peso muerto y sentadilla con barra.', aviso: 'Pide: nivel 10 completo, visto bueno médico/fisio y alguien que te asegure en cada serie.' },
+  12: { nombre: 'Sin techo', emoji: '🏆', desc: 'Más kilos, con mucha paciencia y la técnica siempre por delante.', aviso: 'Pide: llevar meses en el nivel 11 sin dolor y con revisión profesional periódica.' }
+};
+/* Material: lo que Sandra tiene. El cuidador lo marca en Ajustes. */
+const MATERIALES = {
+  pesas: ['Pesas de 1 kg', true], banda: ['Banda elástica', true], agarre: ['Ejercitador de agarre', true],
+  mancuernas: ['Mancuernas más pesadas (2 kg o más)', false], gym: ['Gimnasio (máquinas, barra, rack)', false]
 };
 const BLOQUES = {
   resp: ['Respiración', '🫁'], tobillo: ['Tobillos y pantorrillas', '🦶'], rodilla: ['Rodillas', '🦵'], cadera: ['Caderas', '🔄'],
   core: ['Tripa y espalda baja', '🧘'], movilidad: ['Movilidad de la espalda', '↕️'], postura: ['Espalda alta', '🪑'],
-  levantarse: ['Levantarse de la silla', '⬆️'], equilibrio: ['Equilibrio', '⚖️'], escalon: ['Escalones', '🪜']
+  levantarse: ['Levantarse de la silla', '⬆️'], equilibrio: ['Equilibrio', '⚖️'], escalon: ['Escalones', '🪜'], calent: ['Calentamiento', '🔥'],
+  agarre: ['Agarre', '✊'], brazos: ['Brazos', '💪'], tiron: ['Tirar (espalda)', '🧲'], empuje: ['Empujar (hombros y pecho)', '🙌'],
+  bisagra: ['Bisagra de cadera / peso muerto', '🏗️'], sentadilla: ['Sentadilla y piernas', '🦵'], carga: ['Cargar peso caminando', '🧳']
 };
 const ORDEN_SESION = ['resp', 'tobillo', 'rodilla', 'cadera', 'core', 'movilidad', 'postura', 'levantarse', 'equilibrio', 'escalon'];
+const ORDEN_FUERZA = ['sentadilla', 'empuje', 'bisagra', 'tiron', 'carga', 'agarre', 'brazos'];
 const NIVEL_FISIO = { 3: true, 4: true, 5: true }; // niveles que piden visto bueno (modo cuidador) mientras “pedir visto bueno” esté activo
 
 /* Señales de alarma (misma lista que MeryCon, con palabras sencillas) */
@@ -35,6 +50,8 @@ const PRUEBAS = [
   { id: 'caminata', nombre: 'Caminata continua', unidad: 'min', mejor: 'mas', como: 'Minutos que camina a su ritmo hasta tener que parar por dolor o cansancio (sin forzar). Anota si el dolor mejora al sentarse.' },
   { id: 'pie', nombre: 'Tiempo de pie', unidad: 'min', mejor: 'mas', como: 'Minutos de pie (por ejemplo cocinando) hasta necesitar sentarse o apoyarse.' },
   { id: 'piesjuntos', nombre: 'Pies juntos con apoyo ligero', unidad: 's', mejor: 'mas', max: 30, como: 'Junto a la encimera con una mano rozando. Segundos con los pies juntos (máx. 30). Parar si hay mareo.' },
+  { id: 'agarre', nombre: 'Fuerza de agarre (una vez al mes)', unidad: 'cierres', mejor: 'mas', como: 'Sentada, con el codo apoyado y el ejercitador en la mano. Cuenta cuántas veces lo cierra del todo en 30 segundos con cada mano (apunta la mano más floja). Si tenéis un dinamómetro, anota mejor los kg. Compara solo con ella misma.' },
+  { id: 'pesoup', nombre: 'Prueba de carga (cada mes, si hay mancuernas)', unidad: 'kg', mejor: 'mas', step: 0.5, como: 'Anota los kilos de la mancuerna más pesada con la que hace 10 repeticiones del press de hombros sentada, bien hechas y sin dolor. Solo se hace si el nivel 7 está abierto.' },
   { id: 'peso', nombre: 'Peso (una vez al mes)', unidad: 'kg', mejor: null, step: 0.1, como: 'Misma báscula, por la mañana. Solo una vez al mes: el peso cambia despacio y no es lo único que mide tu progreso.' }
 ];
 
@@ -66,9 +83,24 @@ const EVIDENCIA = [
   { id: 'cdc30s', tema: 'Prueba de fuerza', estado: 'verificado', cita: 'CDC STEADI. Prueba de levantarse de la silla en 30 segundos.', url: 'https://www.cdc.gov/steadi/media/pdfs/STEADI-Assessment-30Sec-508.pdf',
     dice: 'Se cuentan las levantadas completas en 30 s con los brazos cruzados; si necesita las manos, la prueba se puntúa 0. Los valores “por debajo de la media” publicados empiezan a los 60 años (mujeres 60-64: <12).',
     limites: 'Sandra tiene 54 años: no hay tabla de referencia para su edad. Se usa como comparación consigo misma en el tiempo, no contra una norma.', usa: 'Pruebas de seguimiento cada ~2 semanas (levantarse con/sin manos).' },
+  { id: 'liu2022', tema: 'Fuerza progresiva', estado: 'verificado', cita: 'Liu CJ, Latham NK. Progressive resistance strength training for improving physical function in older adults. Cochrane Database Syst Rev (CD002759), versión de 2022 según la página.', url: 'https://www.cochrane.org/evidence/CD002759_progressive-resistance-strength-training-improving-physical-function-older-adults',
+    dice: '121 ensayos con unos 6.700 participantes. El entrenamiento de fuerza progresivo mejoró mucho la fuerza (73 ensayos), mejoró un poco la función física (33 ensayos) y bastante el levantarse de la silla. En personas con artrosis, redujo el dolor. Los efectos adversos graves fueron raros y ninguno se atribuyó al programa; los leves (agujetas, dolor articular) aparecieron en bastantes estudios.',
+    limites: 'Personas mayores (la media de edad es superior a la de Sandra); la página dice que no hay evidencia suficiente sobre riesgos a largo plazo y que los efectos adversos se registraron mal.', usa: 'Respaldo a subir la carga de forma progresiva; la app lo hace por escalones pequeños.' },
+  { id: 'acsm2009p', tema: 'Cómo subir la carga', estado: 'verificado', cita: 'ACSM Position Stand: Progression models in resistance training for healthy adults. Med Sci Sports Exerc 2009 (Ratamess et al.). Leído en una copia del PDF.', url: 'https://sfu.ca/~ryand/kin343/ACSMresistance.pdf',
+    dice: 'Principiantes: 2-3 días/semana con todo el cuerpo, 1-3 series de 8-12 repeticiones con cargas moderadas (empezar con 50-60 % o menos para aprender la técnica), descanso de 2-3 min en los ejercicios básicos pesados y 1-2 min en los complementarios. Regla de subida: cuando se pueden hacer 1-2 repeticiones más que el objetivo en dos sesiones seguidas, se sube la carga un 2-10 %.',
+    limites: 'Para adultos sanos, no para personas con hernia discal, estenosis o dolor crónico. Se leyó el 93 % del texto (se quedó sin leer el final). La evidencia de la regla de subida es de grado B según el propio documento.', usa: 'La app sube la carga solo tras dos sesiones seguidas “bien” en la parte alta de las repeticiones, y respeta descansos de 1-2 min (más en los básicos pesados). La app no la usa para decidir qué ejercicios son seguros para Sandra.' },
+  { id: 'comer2024', tema: 'Estenosis lumbar', estado: 'verificado', cita: 'Comer C et al. Exercise treatments for lumbar spinal stenosis: component analysis of RCTs. Clin Rehabil 2024 (búsquedas hasta abril de 2023). Leído en la ficha del repositorio de la universidad.', url: 'https://eprints.whiterose.ac.uk/208852/',
+    dice: '13 ensayos, 1.440 participantes con claudicación neurógena. Las intervenciones con éxito solían incluir estiramientos, fuerza o musculatura del tronco, ejercicio de condición física (sobre todo bicicleta) y enfoques psicológicos; la mayoría se basaba en ejercicios de flexión lumbar. No se pudo concluir nada sobre la dosis.',
+    limites: 'Pocos estudios y muy distintos entre sí; sin valoración formal de certeza. Los ejercicios de equilibrio casi no aparecían. No dice nada sobre peso muerto ni press por encima de la cabeza en estenosis.', usa: 'Apoya trabajar la fuerza del tronco y la condición física en una persona con estenosis; NO justifica cargas altas. Por eso los niveles altos exigen visto bueno profesional.' },
+  { id: 'bellicha2021', tema: 'Ejercicio y peso', estado: 'verificado', cita: 'Bellicha A et al. Effect of exercise training on weight loss, body composition changes, and weight maintenance in adults with overweight or obesity: an overview of 12 systematic reviews and 149 studies. Obes Rev 2021;22(S4):e13256.', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC8365736',
+    dice: 'El ejercicio por sí solo produce pérdidas de peso pequeñas (entre -1,5 y -3,5 kg frente a no hacer ejercicio) y reduce la grasa, también la visceral. El aeróbico quita algo más peso que la fuerza, pero la fuerza ayuda a conservar masa muscular cuando se come menos. No se halló efecto claro del ejercicio para mantener el peso.',
+    limites: 'Calidad de las revisiones mayormente aceptable o baja; no se estudió obesidad severa; el promedio oculta mucha variación entre personas. Se leyó el resumen de la página.', usa: 'No se promete adelgazar con la app; el objetivo es la función. La alimentación la ve su médico o un dietista.' },
+  { id: 'leong2015', tema: 'Fuerza de agarre', estado: 'verificado', cita: 'Leong DP et al. Prognostic value of grip strength: findings from the PURE study. Lancet 2015;386:266-273.', url: 'https://doi.org/10.1016/S0140-6736(14)62000-6',
+    dice: 'Unas 140.000 personas de 35-70 años en 17 países, seguidas una mediana de 4 años. Por cada 5 kg menos de fuerza de agarre, el riesgo de morir por cualquier causa subió un 16 % y el de morir por causa cardiovascular un 17 %; fue mejor predictor que la presión arterial sistólica.',
+    limites: 'Es una asociación, no prueba que mejorar el agarre reduzca la mortalidad (los propios autores piden más estudios). Se leyó una traducción del resumen. El texto que leí describe la asociación con cáncer en países ricos de forma contradictoria: no la usamos.', usa: 'Razón para medir el agarre una vez al mes. Se interpreta solo contra ella misma, no como pronóstico.' },
+  { id: 'deadlift', tema: 'Peso muerto y espalda', estado: 'localizado', cita: 'Dos ensayos localizados en PubMed: “Effect of an Exercise Program That Includes Deadlifts on Low Back Pain” (PMID 33626500) y “Which Patients With Low Back Pain Benefit From Deadlift Training?” (PMID 25559899).', url: 'https://pubmed.ncbi.nlm.nih.gov/33626500/', dice: 'Existen ensayos sobre peso muerto en dolor lumbar (solo se vieron los títulos). No se pudo abrir ninguno: contenido NO verificado, no se afirma nada de ellos.', limites: '—', usa: 'Pendiente. Mientras tanto, las cargas altas quedan bajo supervisión profesional.' },
   { id: 'geneen2017', tema: 'Dolor crónico', estado: 'localizado', cita: 'Geneen LJ et al. Physical activity and exercise for chronic pain in adults: an overview of Cochrane Reviews. Cochrane 2017 (CD011279).', url: 'https://pubmed.ncbi.nlm.nih.gov/28087891/', dice: 'Existe (localizado). Contenido NO leído todavía.', limites: '—', usa: 'Pendiente de revisar.' },
   { id: 'nice59', tema: 'Dolor lumbar y ciática', estado: 'localizado', cita: 'NICE NG59. Low back pain and sciatica in over 16s: assessment and management.', url: 'https://www.nice.org.uk/guidance/ng59', dice: 'Existe (localizado). No se pudo abrir el texto de recomendaciones: contenido NO verificado.', limites: '—', usa: 'Pendiente de revisar.' },
-  { id: 'acsm2009', tema: 'Peso', estado: 'localizado', cita: 'Donnelly JE et al. ACSM Position Stand: appropriate physical activity intervention strategies for weight loss and prevention of weight regain for adults. Med Sci Sports Exerc 2009.', url: 'https://pubmed.ncbi.nlm.nih.gov/19127177/', dice: 'Existe (localizado). La página no se pudo abrir: contenido NO verificado.', limites: '—', usa: 'Pendiente de revisar antes de decir nada sobre peso y ejercicio.' }
 ];
 const PRINCIPIOS = [
   ['Constancia antes que intensidad', 'who2020', 'Cualquier minuto de movimiento suma; la meta es poder hacerlo semana tras semana.'],
@@ -76,12 +108,16 @@ const PRINCIPIOS = [
   ['Ejercicio terapéutico para la espalda y para rodilla/cadera con artrosis', 'hayden2021', 'Se mueve dentro de lo tolerable; el reposo largo no es la estrategia.'],
   ['Caminar un poco más cada vez', 'walkback2024', 'La caminata sube poco a poco (+1 min tras 3 paseos buenos).'],
   ['El ánimo también cuenta', 'noetel2024', 'Celebrar la constancia, no los días malos.'],
+  ['Subir la fuerza por escalones pequeños', 'acsm2009p', 'Dos sesiones seguidas bien en la parte alta de repeticiones antes de subir la carga; descansos de 1-2 min (más en los pesados).'],
+  ['Fuerza, también con la espalda delicada', 'comer2024', 'Fuerza del tronco y condición física forman parte de lo que suele funcionar en estenosis; las cargas altas necesitan supervisión.'],
   ['Medir con pruebas sencillas', 'cdc30s', 'Se compara contigo misma, sin tablas de otras edades.']
 ];
 const NO_SABEMOS = [
   'No existe un estudio que diga cuál es el orden exacto de ejercicios para una mujer de 54 años con su combinación de espalda, nervio, cadera, rodilla y medicación. Los niveles son lógica clínica conservadora: la fisioterapeuta debe revisarlos.',
   'Las referencias de arriba son resúmenes de la evidencia general. No sustituyen la exploración de un profesional.',
-  'El peso no se trata aquí con dietas: la evidencia sobre ejercicio y pérdida de peso (ACSM) está pendiente de leer, y la alimentación debe verla su médico o un dietista.'
+  'El peso no se trata aquí con dietas: la evidencia sobre ejercicio y peso (Bellicha 2021) dice que el ejercicio solo quita pocos kilos; la alimentación debe verla su médico o un dietista.',
+  'Los niveles 6-12 (pesas, mancuernas, gimnasio, barra) son una escalera de diseño propio: el ACSM y la revisión Cochrane respaldan subir la fuerza poco a poco en general, pero ningún estudio que haya podido leer valida peso muerto o press por encima de la cabeza para una persona con hernia L5-S1, estenosis, espondilolistesis y antecedentes neurológicos como Sandra. Por eso esos niveles piden visto bueno profesional y se abren uno a uno.',
+  'No se sabe qué carga máxima es razonable para ella. Los kilos de la escalera son un techo teórico, no una promesa: se sube solo mientras no haya dolor ni síntomas neurológicos.'
 ];
 
 const MENSAJES = [
